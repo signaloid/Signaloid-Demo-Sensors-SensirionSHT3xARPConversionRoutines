@@ -19,6 +19,14 @@ If you forgot to clone with `--recursive` and end up with empty submodule direct
 	git submodule update --init
 ```
 
+## Running the application on the Signaloid Cloud Developer Platform
+To run this application on the [Signaloid Cloud Developer Platform](https://signaloid.io),
+you need a Signaloid account. You can sign up for a Signaloid account using [this link](https://get.signaloid.io).
+
+Once you have a Signaloid account, you can click the "add to signaloid.io" button at the
+top of this README to connect this repository to the Signaloid Cloud Developer Platform
+and run the application.
+
 ## Running the application locally
 Apart from using Signaloid's Cloud Compute Platform, you can compile and run this application
 locally. Local execution is essentially a native Monte Carlo implementation,

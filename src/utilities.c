@@ -1,5 +1,5 @@
 /*
- *	Copyright (c) 2024, Signaloid.
+ *	Copyright (c) 2026, Signaloid.
  *
  *	Permission is hereby granted, free of charge, to any person obtaining a copy
  *	of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <uxhw.h>
 #include "utilities.h"
+#include "kernel.h"
 
 void
 printUsage(void)
@@ -40,15 +40,16 @@ printUsage(void)
 		"\t[-b, --benchmarking] (Benchmarking mode: Generate outputs in format for benchmarking.)\n"
 		"\t[-j, --json] (Print output in JSON format.)\n"
 		"\t[-h, --help] (Display this help message.)\n",
-		kOutputDistributionIndexMax,
-		kOutputDistributionIndexMax);
+		kSensirionSHT3xARPOutputVariableIndexMax,
+		kSensirionSHT3xARPOutputVariableIndexMax
+	);
 	fprintf(stderr, "\n");
 
 	return;
 }
 
 static void
-setDefaultCommandLineArguments(CommandLineArguments *  arguments)
+setDefaultCommandLineArguments(CommandLineArguments * arguments)
 {
 	/*
 	 *	Older GCC versions have a bug which gives a spurious warning for
@@ -64,7 +65,7 @@ setDefaultCommandLineArguments(CommandLineArguments *  arguments)
 
 	*arguments = (CommandLineArguments)
 	{
-		.common			= (CommonCommandLineArguments) {0}
+		.common = (CommonCommandLineArguments) { 0 }
 	};
 #pragma GCC diagnostic pop
 
@@ -73,11 +74,11 @@ setDefaultCommandLineArguments(CommandLineArguments *  arguments)
 
 CommonConstantReturnType
 getCommandLineArguments(
-	int			argc,
-	char *			argv[],
-	CommandLineArguments *	arguments)
+	int                     argc,
+	char *                  argv[],
+	CommandLineArguments *  arguments)
 {
-	DemoOption		demoSpecificOptions = {0};
+	DemoOption demoSpecificOptions = { 0 };
 
 	if (arguments == NULL)
 	{
@@ -95,7 +96,7 @@ getCommandLineArguments(
 	{
 		fprintf(stderr, "Parsing command line arguments failed\n");
 		printUsage();
-		
+
 		return kCommonConstantReturnTypeError;
 	}
 
@@ -136,24 +137,25 @@ getCommandLineArguments(
 	 */
 	if (!arguments->common.isOutputSelected)
 	{
-		arguments->common.outputSelect = kOutputDistributionIndexMax;
+		arguments->common.outputSelect = kSensirionSHT3xARPOutputVariableIndexMax;
 	}
 
 	/*
 	 *	If a single output is selected, we must be in benchmarking mode or Monte Carlo mode.
 	 */
-	if (arguments->common.outputSelect > kOutputDistributionIndexMax)
+	if (arguments->common.outputSelect > kSensirionSHT3xARPOutputVariableIndexMax)
 	{
 		fprintf(
 			stderr,
 			"Output select value (-S option) is greater than the possible number of outputs: Provided %zd. Max: %d\n",
 			arguments->common.outputSelect,
-			kOutputDistributionIndexMax);
+			kSensirionSHT3xARPOutputVariableIndexMax
+		);
 	}
 	/*
 	 *	When all outputs are selected, we cannot be in benchmarking mode or Monte Carlo mode.
 	 */
-	else if (arguments->common.outputSelect == kOutputDistributionIndexMax)
+	else if (arguments->common.outputSelect == kSensirionSHT3xARPOutputVariableIndexMax)
 	{
 		if ((arguments->common.isBenchmarkingMode) || (arguments->common.isMonteCarloMode))
 		{
@@ -164,116 +166,4 @@ getCommandLineArguments(
 	}
 
 	return kCommonConstantReturnTypeSuccess;
-}
-
-void
-printCalibratedValueAndProbabilities(double calibratedSensorOutput, const char *  variableDescription, const char *  unitsOfMeasurement)
-{
-	/*
-	 *	Note: the calculations of the quantities involving UxHwDoubleProbabilityGT()
-	 *	are purposefully written so as to be self-explanatory and easily checkable,
-	 *	not for efficiency or "cleverness". Also, beware the "percent greater than"
-	 *	and "percent less than" are tricky for larger versus smaller so don't jump
-	 *	to conclusions when you read the code.
-	 */
-	printf("%s: %.2lf %s.\n", variableDescription, calibratedSensorOutput, unitsOfMeasurement);
-	printf("\n");
-	printf(
-		"\tProbability that calibrated sensor output is   5%% or more smaller than %.2"SignaloidParticleModifier"lf, is %.6"SignaloidParticleModifier"lf\n",
-		calibratedSensorOutput,
-		1 - UxHwDoubleProbabilityGT(calibratedSensorOutput, calibratedSensorOutput * (1 - 0.05)));
-	printf(
-		"\tProbability that calibrated sensor output is  50%% or more smaller than %.2"SignaloidParticleModifier"lf, is %.6"SignaloidParticleModifier"lf\n",
-		calibratedSensorOutput,
-		1 - UxHwDoubleProbabilityGT(calibratedSensorOutput, calibratedSensorOutput * (1 - 0.50)));
-	printf(
-		"\tProbability that calibrated sensor output is 100%% or more smaller than %.2"SignaloidParticleModifier"lf, is %.6"SignaloidParticleModifier"lf\n",
-		calibratedSensorOutput,
-		1 - UxHwDoubleProbabilityGT(calibratedSensorOutput, calibratedSensorOutput * (1 - 1.00)));
-	printf(
-		"\tProbability that calibrated sensor output is 200%% or more smaller than %.2"SignaloidParticleModifier"lf, is %.6"SignaloidParticleModifier"lf\n",
-		calibratedSensorOutput,
-		1 - UxHwDoubleProbabilityGT(calibratedSensorOutput, calibratedSensorOutput * (1 - 2.00)));
-	printf("\n");
-	printf(
-		"\tProbability that calibrated sensor output is   5%% or more greater than %.2"SignaloidParticleModifier"lf, is %.6"SignaloidParticleModifier"lf\n",
-		calibratedSensorOutput,
-		UxHwDoubleProbabilityGT(calibratedSensorOutput, 1.05 * calibratedSensorOutput));
-	printf(
-		"\tProbability that calibrated sensor output is  50%% or more greater than %.2"SignaloidParticleModifier"lf, is %.6"SignaloidParticleModifier"lf\n",
-		calibratedSensorOutput,
-		UxHwDoubleProbabilityGT(calibratedSensorOutput, 1.50 * calibratedSensorOutput));
-	printf(
-		"\tProbability that calibrated sensor output is 100%% or more greater than %.2"SignaloidParticleModifier"lf, is %.6"SignaloidParticleModifier"lf\n",
-		calibratedSensorOutput,
-		UxHwDoubleProbabilityGT(calibratedSensorOutput, 2.00 * calibratedSensorOutput));
-	printf(
-		"\tProbability that calibrated sensor output is 200%% or more greater than %.2"SignaloidParticleModifier"lf, is %.6"SignaloidParticleModifier"lf\n",
-		calibratedSensorOutput,
-		UxHwDoubleProbabilityGT(calibratedSensorOutput, 3.00 * calibratedSensorOutput));
-}
-
-void
-populateJSONVariableStruct(
-	JSONVariable *		jsonVariable,
-	double *		outputVariableValues,
-	const char *		outputVariableDescription,
-	OutputDistributionIndex	outputSelect,
-	size_t			numberOfOutputVariableValues)
-{
-	snprintf(jsonVariable->variableSymbol, kCommonConstantMaxCharsPerJSONVariableSymbol, "outputDistributions[%u]", outputSelect);
-	snprintf(jsonVariable->variableDescription, kCommonConstantMaxCharsPerJSONVariableDescription, "%s", outputVariableDescription);
-	jsonVariable->values = (JSONVariablePointer){ .asDouble = outputVariableValues };
-	jsonVariable->type = kJSONVariableTypeDouble;
-	jsonVariable->size = numberOfOutputVariableValues;
-
-	return;
-}
-
-void
-printJSONFormattedOutput(
-	CommandLineArguments *	arguments,
-	double *		monteCarloOutputSamples,
-	double *		outputDistributions,
-	const char **		outputVariableDescriptions)
-{
-	JSONVariable			jsonVariables[kOutputDistributionIndexMax];
-	OutputDistributionIndex		outputSelectLowerBound;
-	OutputDistributionIndex		outputSelectUpperBound;
-
-	if (arguments->common.outputSelect == kOutputDistributionIndexMax)
-	{
-		outputSelectLowerBound = (OutputDistributionIndex)0;
-		outputSelectUpperBound = kOutputDistributionIndexMax;
-	}
-	else
-	{
-		outputSelectLowerBound = arguments->common.outputSelect;
-		outputSelectUpperBound = outputSelectLowerBound + 1;
-	}
-
-	for (OutputDistributionIndex outputSelect = outputSelectLowerBound; outputSelect < outputSelectUpperBound; outputSelect++)
-	{
-		/*
-		 *	If in Monte Carlo mode, `pointerToOutputVariable` points to the beginning of the `monteCarloOutputSamples` array.
-		 *	In this case, `arguments.common.numberOfMonteCarloIterations` is the length of the `monteCarloOutputSamples` array.
-		 *	Else, it points to the entry of the `outputVariables` to be used.
-		 *	In this case, `arguments.common.numberOfMonteCarloIterations` equals 1.
-		 */
-		double *	pointerToOutputVariable = arguments->common.isMonteCarloMode ? monteCarloOutputSamples : &outputDistributions[outputSelect];
-
-		populateJSONVariableStruct(
-			&jsonVariables[outputSelect],
-			pointerToOutputVariable,
-			outputVariableDescriptions[outputSelect],
-			outputSelect,
-			arguments->common.numberOfMonteCarloIterations);
-	}
-
-	printJSONVariables(
-		&jsonVariables[outputSelectLowerBound],
-		outputSelectUpperBound - outputSelectLowerBound,
-		"SHT3xARP Sensor Calibration Use Case");
-
-	return;
 }
