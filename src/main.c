@@ -1,5 +1,5 @@
 /*
- *	Copyright (c) 2026, Signaloid.
+ *	Copyright (c) 2024-2026, Signaloid.
  *
  *	Permission is hereby granted, free of charge, to any person obtaining a copy
  *	of this software and associated documentation files (the "Software"), to deal
@@ -27,61 +27,42 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <inttypes.h>
-#include <uxhw.h>
 #include "utilities.h"
 #include "kernel.h"
 
-/**
- *	@brief  Sets the Input Variables via call to UxHw Parametric function.
- *
- *	@param  inputVariables	: An array of double values, where the function writes the distributional data.
- */
-static void
-setInputVariablesViaUxHwCall(double * inputVariables)
-{
+#ifdef NO_OS_AVAILABLE
 
-	inputVariables[kSensirionSHT3xARPInputVariableIndexVrh] = UxHwDoubleUniformDist(
-		kSensirionSHT3xARPDefaultInputDistributionVrhUniformDistLow,
-		kSensirionSHT3xARPDefaultInputDistributionVrhUniformDistHigh
-	);
-
-	inputVariables[kSensirionSHT3xARPInputVariableIndexVt] = UxHwDoubleUniformDist(
-		kSensirionSHT3xARPDefaultInputDistributionVtUniformDistLow,
-		kSensirionSHT3xARPDefaultInputDistributionVtUniformDistHigh
-	);
-
-	inputVariables[kSensirionSHT3xARPInputVariableIndexVsupply] = UxHwDoubleUniformDist(
-		kSensirionSHT3xARPDefaultInputDistributionVsupplyUniformDistLow,
-		kSensirionSHT3xARPDefaultInputDistributionVsupplyUniformDistHigh
-	);
-
-	return;
-}
+void
+returnZeroNoOS(void);
+#endif
 
 int
 main(int argc, char *  argv[])
 {
 	CommandLineArguments arguments = { 0 };
 
-	double          calibratedSensorOutput;
-	double *        monteCarloOutputSamples = NULL;
-	clock_t         start;
-	clock_t         end;
-	double          cpuTimeUsedSeconds;
-	double          inputVariables[kSensirionSHT3xARPInputVariableIndexMax];
-	double          outputVariables[kSensirionSHT3xARPOutputVariableIndexMax];
-	const char *    outputVariableNames[kSensirionSHT3xARPOutputVariableIndexMax] = {
+	double *                    monteCarloOutputSamples = NULL;
+	clock_t                     start = 0;
+	clock_t                     end;
+	clock_t                     cpuTimeInClockTicks = 0;
+	double                      outputVariables[kSensirionSHT3xARPOutputVariableIndexMax] = { 0 };
+	const char *                outputVariableNames[kSensirionSHT3xARPOutputVariableIndexMax] = {
 		"Calibrated Relative Humidity",
 		"Calibrated Temperature (in Celsius)",
-		"Calibrated Temperature (in Farenheit)"
+		"Calibrated Temperature (in Fahrenheit)"
 	};
-	const char *    outputVariableDescriptions[kSensirionSHT3xARPOutputVariableIndexMax] = {
-		[kSensirionSHT3xARPOutputVariableIndexCalibratedRelativeHumidity]        = "Calibrated Relative Humidity (%)",
-		[kSensirionSHT3xARPOutputVariableIndexCalibratedTemperatureCelcius]      = "Calibrated Temperature (in Celsius)",
-		[kSensirionSHT3xARPOutputVariableIndexCalibratedTemperatureFahrenheit]   = "Calibrated Temperature (in Fahrenheit)",
+	const char *                outputVariableDescriptions[kSensirionSHT3xARPOutputVariableIndexMax] = {
+		[kSensirionSHT3xARPOutputVariableIndexCalibratedRelativeHumidity]       = "Calibrated Relative Humidity (%)",
+		[kSensirionSHT3xARPOutputVariableIndexCalibratedTemperatureCelcius]     = "Calibrated Temperature (in Celsius)",
+		[kSensirionSHT3xARPOutputVariableIndexCalibratedTemperatureFahrenheit]  = "Calibrated Temperature (in Fahrenheit)",
 	};
-	const char *    applicationDescription = "Sensirion SHT3x ARP Conversion Routines";
-	MeanAndVariance meanAndVariance;
+	kOutputVariableTypeIndex    outputVariableTypes[kSensirionSHT3xARPOutputVariableIndexMax] = {
+		[kSensirionSHT3xARPOutputVariableIndexCalibratedRelativeHumidity]       = kOutputVariableTypeDistribution,
+		[kSensirionSHT3xARPOutputVariableIndexCalibratedTemperatureCelcius]     = kOutputVariableTypeDistribution,
+		[kSensirionSHT3xARPOutputVariableIndexCalibratedTemperatureFahrenheit]  = kOutputVariableTypeDistribution,
+	};
+	const char *                applicationDescription = "Sensirion SHT3x ARP Conversion Routines";
+	MeanAndVariance             meanAndVariance;
 
 	/*
 	 *	Get command line arguments.
@@ -100,6 +81,8 @@ main(int argc, char *  argv[])
 		);
 	}
 
+	const bool isScalarOutputSelected = isSelectedOutputScalar(&arguments.common, outputVariableTypes, kSensirionSHT3xARPOutputVariableIndexMax);
+
 	/*
 	 *	Start timing.
 	 */
@@ -108,35 +91,27 @@ main(int argc, char *  argv[])
 		start = clock();
 	}
 
-	for (size_t ii = 0; ii < arguments.common.numberOfMonteCarloIterations; ii++)
-	{
-		/*
-		 *	Set input distribution values, inside the main computation
-		 *	loop, so that it can also generate samples in the native
-		 *	Monte Carlo Execution Mode.
-		 */
-		setInputVariablesViaUxHwCall(inputVariables);
-
-		calibratedSensorOutput = SensirionSHT3xARP_calculateOutput(arguments.common.outputSelect, inputVariables, outputVariables);
-		calibratedSensorOutput = SensirionSHT3xARP_calculateOutput(arguments.common.outputSelect, inputVariables, outputVariables);
-
-		/*
-		 *	For this application, calibratedSensorOutput is the item we track.
-		 */
-		if (arguments.common.isMonteCarloMode)
-		{
-			monteCarloOutputSamples[ii] = calibratedSensorOutput;
-		}
-	}
-
 	/*
-	 *	If not doing Laplace version, then approximate the cost of the third phase of
-	 *	Monte Carlo (post-processing), by calculating the mean and variance.
+	 *	Dispatch to the mode-specific kernel. The Monte Carlo loop lives
+	 *	inside `SensirionSHT3xARPCalculateOutputMonteCarlo`.
 	 */
 	if (arguments.common.isMonteCarloMode)
 	{
-		meanAndVariance         = calculateMeanAndVarianceOfDoubleSamples(monteCarloOutputSamples, arguments.common.numberOfMonteCarloIterations);
-		calibratedSensorOutput  = meanAndVariance.mean;
+		SensirionSHT3xARPCalculateOutputMonteCarlo(arguments.common.numberOfMonteCarloIterations, arguments.common.outputSelect, outputVariables, monteCarloOutputSamples);
+
+		/*
+		 *	If not doing UxHw version, then approximate the cost of the third phase of
+		 *	Monte Carlo (post-processing), by calculating the mean and variance.
+		 */
+		if (!isScalarOutputSelected)
+		{
+			meanAndVariance = calculateMeanAndVarianceOfDoubleSamples(monteCarloOutputSamples, arguments.common.numberOfMonteCarloIterations);
+			outputVariables[arguments.common.outputSelect] = meanAndVariance.mean;
+		}
+	}
+	else
+	{
+		SensirionSHT3xARPCalculateOutputUxHw(arguments.common.outputSelect, outputVariables);
 	}
 
 	/*
@@ -145,7 +120,7 @@ main(int argc, char *  argv[])
 	if (arguments.common.isTimingEnabled)
 	{
 		end                 = clock();
-		cpuTimeUsedSeconds  = ((double) (end - start)) / CLOCKS_PER_SEC;
+		cpuTimeInClockTicks = end - start;
 	}
 
 	/*
@@ -159,7 +134,8 @@ main(int argc, char *  argv[])
 			outputVariables,
 			outputVariableNames,
 			kSensirionSHT3xARPOutputVariableIndexMax,
-			applicationDescription
+			applicationDescription,
+			outputVariableTypes
 		);
 	}
 	else
@@ -170,7 +146,8 @@ main(int argc, char *  argv[])
 			outputVariables,
 			outputVariableNames,
 			outputVariableDescriptions,
-			monteCarloOutputSamples
+			monteCarloOutputSamples,
+			outputVariableTypes
 		);
 	}
 
@@ -179,7 +156,7 @@ main(int argc, char *  argv[])
 	 */
 	if (arguments.common.isTimingEnabled)
 	{
-		printf("\nCPU time used: %lf seconds\n", cpuTimeUsedSeconds);
+		printf("\nCPU time used: %lf seconds\n", ((double) cpuTimeInClockTicks) / CLOCKS_PER_SEC);
 	}
 
 	/*
@@ -205,12 +182,19 @@ main(int argc, char *  argv[])
 	if (arguments.common.isMonteCarloMode)
 	{
 		saveMonteCarloDoubleDataToDataDotOutFile(
-			monteCarloOutputSamples, (uint64_t) (cpuTimeUsedSeconds * 1000000),
-			arguments.common.numberOfMonteCarloIterations
+			monteCarloOutputSamples,
+			((uint64_t) cpuTimeInClockTicks) * 1000000 / CLOCKS_PER_SEC,
+			isScalarOutputSelected ? 1 : arguments.common.numberOfMonteCarloIterations
 		);
 
 		free(monteCarloOutputSamples);
 	}
 
+#ifdef NO_OS_AVAILABLE
+	returnZeroNoOS();
+#else
+
 	return 0;
+
+#endif
 }

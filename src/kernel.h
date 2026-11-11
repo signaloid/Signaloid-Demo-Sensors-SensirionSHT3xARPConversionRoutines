@@ -1,5 +1,5 @@
 /*
- *	Copyright (c) 2026, Signaloid.
+ *	Copyright (c) 2024-2026, Signaloid.
  *
  *	Permission is hereby granted, free of charge, to any person obtaining a copy
  *	of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,7 @@
 #pragma once
 
 
+#include <stddef.h>
 #include <stdint.h>
 
 
@@ -62,7 +63,7 @@ typedef enum
  *	Output Variables:
  *		kSensirionSHT3xARPOutputVariableIndexCalibratedRelativeHumidity		: Calibrated Relative Humidity (percentage %)
  *		kSensirionSHT3xARPOutputVariableIndexCalibratedTemperatureCelcius	: Calibrated Temperature (in Celsius)
- *		kSensirionSHT3xARPOutputVariableIndexCalibratedTemperatureFahrenheit	: Calibrated Temperature (in Farenheit)
+ *		kSensirionSHT3xARPOutputVariableIndexCalibratedTemperatureFahrenheit	: Calibrated Temperature (in Fahrenheit)
  */
 typedef enum
 {
@@ -76,7 +77,8 @@ typedef enum
  *	@brief  Sensor calibration routines taken from Figure 9 and Figure 10 in
  *		page 9 of Datasheet_SHT3x_ARP.pdf, 2024-07-03.
  *
- *	@param  arguments		: Pointer to command line arguments struct.
+ *	@param  outputSelect		: Selects which output to calculate;
+ *					  `kSensirionSHT3xARPOutputVariableIndexMax` calculates all of them.
  *	@param  inputVariables		: The array of input variables used in the calculation.
  *	@param  outputVariables		: An array of output variables. Writes the result to
  *					  `outputVariables[outputSelectValue]`.
@@ -86,5 +88,36 @@ double
 SensirionSHT3xARP_calculateOutput(
 	uint8_t     outputSelect,
 	double *    inputVariables,
-	double *    outputVariables
-);
+	double *    outputVariables);
+
+/**
+ *	@brief	UxHw-mode calculation kernel. Sets the input variables as UxHw
+ *		distributions and runs a single distributional evaluation of the
+ *		selected output(s).
+ *
+ *	@param	outputSelect		: Selects which output to calculate;
+ *					  `kSensirionSHT3xARPOutputVariableIndexMax` calculates all of them.
+ *	@param	outputVariables		: An array of output variables to fill.
+ *	@return	double			: Returns the distributional value calculated.
+ */
+double
+SensirionSHT3xARPCalculateOutputUxHw(size_t outputSelect, double * outputVariables);
+
+/**
+ *	@brief	Monte Carlo-mode calculation kernel. Runs
+ *		`numberOfMonteCarloIterations` evaluations of
+ *		the selected output and stores each result in `monteCarloOutputSamples`.
+ *
+ *	@param	numberOfMonteCarloIterations	: Number of Monte Carlo iterations to run.
+ *	@param	outputSelect		: Selects which output to calculate;
+ *					  `kSensirionSHT3xARPOutputVariableIndexMax` calculates all of them.
+ *	@param	outputVariables		: An array of output variables to fill.
+ *	@param	monteCarloOutputSamples	: Array of `numberOfMonteCarloIterations` doubles, filled with samples.
+ *	@return	double			: Returns the value calculated in the last iteration.
+ */
+double
+SensirionSHT3xARPCalculateOutputMonteCarlo(
+	size_t      numberOfMonteCarloIterations,
+	size_t      outputSelect,
+	double *    outputVariables,
+	double *    monteCarloOutputSamples);

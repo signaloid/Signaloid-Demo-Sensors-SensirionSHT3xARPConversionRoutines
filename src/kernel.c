@@ -1,5 +1,5 @@
 /*
- *	Copyright (c) 2026, Signaloid.
+ *	Copyright (c) 2024-2026, Signaloid.
  *
  *	Permission is hereby granted, free of charge, to any person obtaining a copy
  *	of this software and associated documentation files (the "Software"), to deal
@@ -20,9 +20,37 @@
  *	SOFTWARE.
  */
 
+#include <stddef.h>
 #include <stdbool.h>
+#include <uxhw.h>
 #include "kernel.h"
 
+
+/**
+ *	@brief  Sets the Input Variables via call to UxHw Parametric function.
+ *
+ *	@param  inputVariables	: An array of double values, where the function writes the distributional data.
+ */
+static void
+SensirionSHT3xARPSetInputVariablesViaUxHwCall(double * inputVariables)
+{
+	inputVariables[kSensirionSHT3xARPInputVariableIndexVrh] = UxHwDoubleUniformDist(
+		kSensirionSHT3xARPDefaultInputDistributionVrhUniformDistLow,
+		kSensirionSHT3xARPDefaultInputDistributionVrhUniformDistHigh
+	);
+
+	inputVariables[kSensirionSHT3xARPInputVariableIndexVt] = UxHwDoubleUniformDist(
+		kSensirionSHT3xARPDefaultInputDistributionVtUniformDistLow,
+		kSensirionSHT3xARPDefaultInputDistributionVtUniformDistHigh
+	);
+
+	inputVariables[kSensirionSHT3xARPInputVariableIndexVsupply] = UxHwDoubleUniformDist(
+		kSensirionSHT3xARPDefaultInputDistributionVsupplyUniformDistLow,
+		kSensirionSHT3xARPDefaultInputDistributionVsupplyUniformDistHigh
+	);
+
+	return;
+}
 
 double
 SensirionSHT3xARP_calculateOutput(uint8_t outputSelect, double *  inputVariables, double *  outputVariables)
@@ -63,4 +91,47 @@ SensirionSHT3xARP_calculateOutput(uint8_t outputSelect, double *  inputVariables
 	}
 
 	return calibratedValue;
+}
+
+double
+SensirionSHT3xARPCalculateOutputUxHw(size_t outputSelect, double * outputVariables)
+{
+	double  inputVariables[kSensirionSHT3xARPInputVariableIndexMax];
+	double  calibratedSensorOutput;
+
+	SensirionSHT3xARPSetInputVariablesViaUxHwCall(inputVariables);
+
+	calibratedSensorOutput = SensirionSHT3xARP_calculateOutput(outputSelect, inputVariables, outputVariables);
+
+	return calibratedSensorOutput;
+}
+
+double
+SensirionSHT3xARPCalculateOutputMonteCarlo(
+	size_t      numberOfMonteCarloIterations,
+	size_t      outputSelect,
+	double *    outputVariables,
+	double *    monteCarloOutputSamples)
+{
+	double  inputVariables[kSensirionSHT3xARPInputVariableIndexMax];
+	double  calibratedSensorOutput = 0.0;
+
+	for (size_t ii = 0; ii < numberOfMonteCarloIterations; ii++)
+	{
+		/*
+		 *	Set input distribution values, inside the main computation
+		 *	loop, so that it can also generate samples in the native
+		 *	Monte Carlo Execution Mode.
+		 */
+		SensirionSHT3xARPSetInputVariablesViaUxHwCall(inputVariables);
+
+		calibratedSensorOutput = SensirionSHT3xARP_calculateOutput(outputSelect, inputVariables, outputVariables);
+
+		/*
+		 *	For this application, calibratedSensorOutput is the item we track.
+		 */
+		monteCarloOutputSamples[ii] = calibratedSensorOutput;
+	}
+
+	return calibratedSensorOutput;
 }
